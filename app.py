@@ -8,109 +8,100 @@ EMPTY = 0
 P1 = 1
 P2 = 2
 
-CELL = 56          # cell size in px
-GAP = 10           # gap between cells in px
-BOARD_BG = "rgba(255,255,255,.05)"
-
 st.set_page_config(page_title="Connect Four", page_icon="🟡", layout="centered")
 
-# ---------- CSS: aligned layout (fixed board width + CSS grid) ----------
-BOARD_WIDTH = COLS * CELL + (COLS - 1) * GAP
-
+# ---------- CSS (responsive + aligned) ----------
 st.markdown(
-    f"""
+    """
 <style>
-.block-container {{
-  padding-top: 3.8rem !important;
+/* Keep everything in a centered, consistent width so buttons + board align */
+.block-container{
+  padding-top: 3.6rem !important;
   padding-bottom: 2.6rem !important;
-  max-width: {BOARD_WIDTH + 120}px; /* keep app snug around board */
-}}
-
-header[data-testid="stHeader"] {{
+  max-width: 860px !important;
+}
+header[data-testid="stHeader"]{
   background: rgba(0,0,0,.35) !important;
   backdrop-filter: blur(8px);
-}}
+}
 
-.title {{
-  font-size: 2.1rem;
+.title{
+  font-size: 2.2rem;
   font-weight: 900;
-  margin: 0.2rem 0 0.1rem 0;
-}}
-.subtle {{
+  margin: .2rem 0 .1rem 0;
+}
+.subtle{
   color: rgba(255,255,255,.72);
   margin-bottom: 1rem;
-}}
+}
 
-/* Game container centered */
-.game-wrap {{
-  width: {BOARD_WIDTH}px;
-  margin: 0 auto;
-}}
-
-/* Controls row doesn't break alignment */
-.controls {{
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  width: {BOARD_WIDTH}px;
-  margin: 0 auto 10px auto;
-}}
-
-/* Column drop buttons aligned to board width */
-.drop-row {{
-  width: {BOARD_WIDTH}px;
-  margin: 0 auto 12px auto;
-  display: grid;
-  grid-template-columns: repeat({COLS}, 1fr);
-  gap: {GAP}px;
-}}
-
-.drop-row button {{
-  width: 100% !important;
-}}
-
-/* Board */
-.board {{
-  width: {BOARD_WIDTH}px;
-  margin: 0 auto;
-  padding: 14px;
-  border-radius: 18px;
+/* Board card */
+.board-card{
+  width: 100%;
   border: 1px solid rgba(255,255,255,.12);
-  background: {BOARD_BG};
+  background: rgba(255,255,255,.05);
+  border-radius: 18px;
+  padding: 14px;
   box-shadow: 0 16px 50px rgba(0,0,0,.45);
-}}
+}
 
-.grid {{
+/* Actual grid: 7 equal columns, responsive */
+.c4-grid{
   display: grid;
-  grid-template-columns: repeat({COLS}, {CELL}px);
-  grid-template-rows: repeat({ROWS}, {CELL}px);
-  gap: {GAP}px;
-  justify-content: center;
-}}
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+}
 
-.cell {{
-  width: {CELL}px;
-  height: {CELL}px;
+/* Cells: perfectly square */
+.c4-cell{
+  width: 100%;
+  aspect-ratio: 1 / 1;
   border-radius: 999px;
   border: 2px solid rgba(255,255,255,.10);
   background: rgba(0,0,0,.18);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  line-height: 1;
-}}
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Disc layer */
+.c4-disc{
+  width: 78%;
+  height: 78%;
+  border-radius: 999px;
+  box-shadow:
+    inset 0 10px 18px rgba(255,255,255,.08),
+    inset 0 -14px 22px rgba(0,0,0,.35),
+    0 10px 22px rgba(0,0,0,.35);
+}
+
+/* Colors */
+.disc-empty{
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.10), rgba(0,0,0,.35));
+  opacity: .35;
+}
+.disc-p1{
+  background: radial-gradient(circle at 30% 30%, #fff3a6, #eab308 58%, #8a6a00);
+}
+.disc-p2{
+  background: radial-gradient(circle at 30% 30%, #ffb4b4, #ef4444 58%, #7f1d1d);
+}
+
+/* Make Streamlit buttons a bit tighter and consistent */
+.stButton>button{
+  border-radius: 14px !important;
+  padding: .65rem .85rem !important;
+}
 
 /* Small legend */
-.legend {{
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
+.legend{
   color: rgba(255,255,255,.75);
   font-size: .95rem;
-}}
+  text-align: right;
+  padding-top: 1.75rem;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -160,13 +151,6 @@ def check_winner(board: List[List[int]]) -> int:
 def is_draw(board: List[List[int]]) -> bool:
     return all(board[0][c] != EMPTY for c in range(COLS)) and check_winner(board) == EMPTY
 
-def emoji_cell(val: int) -> str:
-    if val == P1:
-        return "🟡"
-    if val == P2:
-        return "🔴"
-    return "⚫"
-
 def simulate_move_and_check(board: List[List[int]], col: int, player: int) -> bool:
     b = [row[:] for row in board]
     if drop_piece(b, col, player) is None:
@@ -177,19 +161,41 @@ def cpu_pick_move(board: List[List[int]]) -> int:
     moves = valid_moves(board)
     if not moves:
         return 0
-
-    # win now
+    # Win now
     for c in moves:
         if simulate_move_and_check(board, c, P2):
             return c
-    # block
+    # Block
     for c in moves:
         if simulate_move_and_check(board, c, P1):
             return c
-    # center-ish
+    # Prefer center
     center_order = sorted(moves, key=lambda x: abs(x - (COLS // 2)))
-    top = center_order[:3] if len(center_order) >= 3 else center_order
-    return random.choice(top)
+    return random.choice(center_order[:3] if len(center_order) >= 3 else center_order)
+
+def disc_class(v: int) -> str:
+    if v == P1:
+        return "disc-p1"
+    if v == P2:
+        return "disc-p2"
+    return "disc-empty"
+
+def render_board_html(board: List[List[int]]) -> str:
+    # Render entire board in ONE HTML block so the CSS grid stays intact.
+    cells = []
+    for r in range(ROWS):
+        for c in range(COLS):
+            cls = disc_class(board[r][c])
+            cells.append(
+                f'<div class="c4-cell"><div class="c4-disc {cls}"></div></div>'
+            )
+    return f"""
+    <div class="board-card">
+      <div class="c4-grid">
+        {''.join(cells)}
+      </div>
+    </div>
+    """
 
 # ---------- Session state ----------
 if "board" not in st.session_state:
@@ -210,23 +216,19 @@ def reset_game():
 st.markdown('<div class="title">Connect Four</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtle">Drop discs, connect four in a row — horizontal, vertical, or diagonal.</div>', unsafe_allow_html=True)
 
-board = st.session_state.board
-moves_locked = st.session_state.winner != EMPTY or is_draw(board)
-
-# Controls (kept tight and aligned)
-st.markdown('<div class="controls">', unsafe_allow_html=True)
-c1, c2, c3 = st.columns([0.52, 0.30, 0.18])
-with c1:
+top1, top2, top3 = st.columns([0.52, 0.28, 0.20])
+with top1:
     st.session_state.mode = st.selectbox(
-        "Mode",
-        ["2 Players", "Vs Computer"],
-        index=0 if st.session_state.mode == "2 Players" else 1,
+        "Mode", ["2 Players", "Vs Computer"],
+        index=0 if st.session_state.mode == "2 Players" else 1
     )
-with c2:
+with top2:
     st.button("🔄 Reset", use_container_width=True, on_click=reset_game)
-with c3:
-    st.markdown('<div class="legend">P1 🟡 <span style="opacity:.6;">|</span> P2 🔴</div>', unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+with top3:
+    st.markdown('<div class="legend">P1 🟡 &nbsp; | &nbsp; P2 🔴</div>', unsafe_allow_html=True)
+
+board = st.session_state.board
+locked = st.session_state.winner != EMPTY or is_draw(board)
 
 # Status
 if st.session_state.winner != EMPTY:
@@ -239,13 +241,13 @@ else:
         who = "🔴 Computer"
     st.write(f"**Turn:** {who}")
 
-# Drop buttons row (true grid aligned with board)
-st.markdown('<div class="drop-row">', unsafe_allow_html=True)
+# Column buttons (these will align because board is width:100% and columns are equal fractions)
 btn_cols = st.columns(COLS, gap="small")
 for c in range(COLS):
     with btn_cols[c]:
-        can_play = (not moves_locked) and (board[0][c] == EMPTY)
+        can_play = (not locked) and (board[0][c] == EMPTY)
         if st.button(f"⬇️ {c+1}", key=f"drop_{c}", use_container_width=True, disabled=not can_play):
+            # Human move
             drop_piece(board, c, st.session_state.turn)
             w = check_winner(board)
             if w != EMPTY:
@@ -254,7 +256,7 @@ for c in range(COLS):
                 if not is_draw(board):
                     st.session_state.turn = P2 if st.session_state.turn == P1 else P1
 
-            # CPU response
+            # CPU move if enabled
             if (
                 st.session_state.mode == "Vs Computer"
                 and st.session_state.winner == EMPTY
@@ -271,14 +273,8 @@ for c in range(COLS):
                         st.session_state.turn = P1
 
             st.rerun()
-st.markdown("</div>", unsafe_allow_html=True)
 
-# Board render (CSS grid)
-st.markdown('<div class="board"><div class="grid">', unsafe_allow_html=True)
-for r in range(ROWS):
-    for c in range(COLS):
-        st.markdown(f'<div class="cell">{emoji_cell(board[r][c])}</div>', unsafe_allow_html=True)
-st.markdown("</div></div>", unsafe_allow_html=True)
+# Render board (single HTML call = no layout break)
+st.markdown(render_board_html(board), unsafe_allow_html=True)
 
-st.caption("In 'Vs Computer' mode, the CPU plays a simple win/block strategy and prefers the center.")
-
+st.caption("Tip: In 'Vs Computer' mode, the CPU tries to win, block, and prefers center columns.")
